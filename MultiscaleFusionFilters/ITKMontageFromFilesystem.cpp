@@ -7,6 +7,7 @@
 #include <fstream>
 
 //#include "itkImageFileWriter.h" //for debugging
+//#include "itkParseTileConfiguration.h"
 #include "itkStreamingImageFilter.h"
 #include "itkTileMergeImageFilter.h"
 #include "itkTileMontage.h"
@@ -52,7 +53,7 @@ ITKMontageFromFilesystem::ITKMontageFromFilesystem()
 {
   m_MontageSize = {3, 3, 1};
 
-  m_InputFileListInfo.FileExtension = QString("tif");
+  m_InputTileConfiguration.setFileExtension("txt");
 
   initialize();
 }
@@ -80,7 +81,7 @@ void ITKMontageFromFilesystem::setupFilterParameters()
 {
   FilterParameterVector parameters;
   parameters.push_back(SIMPL_NEW_INT_VEC3_FP("Montage Size", MontageSize, FilterParameter::Parameter, ITKMontageFromFilesystem));
-  parameters.push_back(SIMPL_NEW_FILELISTINFO_FP("Input File List", InputFileListInfo, FilterParameter::Parameter, ITKMontageFromFilesystem));
+  parameters.push_back(SIMPL_NEW_INPUT_FILE_FP("Input Tile Configuration", InputTileConfiguration, FilterParameter::Parameter, ITKMontageFromFilesystem));
 
   parameters.push_back(SIMPL_NEW_STRING_FP("Data Container", DataContainerName, FilterParameter::CreatedArray, ITKMontageFromFilesystem));
   // parameters.push_back(SeparatorFilterParameter::New("Cell Data", FilterParameter::CreatedArray));
@@ -101,13 +102,13 @@ void ITKMontageFromFilesystem::dataCheck() // plagiarized from DREAM3D_Plugins/I
 
   QString ss;
 
-  if(m_InputFileListInfo.InputPath.isEmpty())
-  {
-    ss = QObject::tr("The input directory must be set");
-    setErrorCondition(-13);
-    notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
-    return;
-  }
+  // if(m_InputTileConfiguration.InputPath.isEmpty())
+  //{
+  //  ss = QObject::tr("The input directory must be set");
+  //  setErrorCondition(-13);
+  //  notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
+  //  return;
+  //}
 
   DataContainer::Pointer m = getDataContainerArray()->createNonPrereqDataContainer<AbstractFilter>(this, getDataContainerName());
   if(getErrorCondition() < 0)
@@ -118,15 +119,7 @@ void ITKMontageFromFilesystem::dataCheck() // plagiarized from DREAM3D_Plugins/I
   ImageGeom::Pointer image = ImageGeom::CreateGeometry(SIMPL::Geometry::ImageGeometry);
   m->setGeometry(image);
 
-  QVector<size_t> tDims(1, m_InputFileListInfo.EndIndex - m_InputFileListInfo.StartIndex + 1);
-  QVector<size_t> cDims(1, 1);
-  getDataContainerArray()->getDataContainer(getDataContainerName())->createNonPrereqAttributeMatrix(this, getMetaDataAttributeMatrixName(), tDims, AttributeMatrix::Type::MetaData);
-  if(getErrorCondition() < 0)
-  {
-    return;
-  }
-
-  QFileInfo tileConfiguration(QDir(m_InputFileListInfo.InputPath), "TileConfiguration.txt");
+  QFileInfo tileConfiguration(QDir(m_InputTileConfiguration), "TileConfiguration.txt");
 
   if(tileConfiguration.exists())
   {
@@ -135,87 +128,23 @@ void ITKMontageFromFilesystem::dataCheck() // plagiarized from DREAM3D_Plugins/I
     notifyStatusMessage(getMessagePrefix(), getHumanLabel(), ss);
     PositionTableType pt;
     FilenameTableType ft;
-    loadTileConfiguration(m_InputFileListInfo.InputPath.toStdString(), m_MontageSize.x, m_MontageSize.y, pt, ft);
+    loadTileConfiguration(m_InputTileConfiguration.InputPath.toStdString(), m_MontageSize.x, m_MontageSize.y, pt, ft);
   }
   else
   {
-    bool hasMissingFiles = false;
-    bool orderAscending = false;
-
-    if(m_InputFileListInfo.Ordering == 0)
-    {
-      orderAscending = true;
-    }
-    else if(m_InputFileListInfo.Ordering == 1)
-    {
-      orderAscending = false;
-    }
-
-    // Now generate all the file names the user is asking for and populate the table
-    QVector<QString> fileList = FilePathGenerator::GenerateFileList(m_InputFileListInfo.StartIndex, m_InputFileListInfo.EndIndex, m_InputFileListInfo.IncrementIndex, hasMissingFiles, orderAscending,
-                                                                    m_InputFileListInfo.InputPath, m_InputFileListInfo.FilePrefix, m_InputFileListInfo.FileSuffix, m_InputFileListInfo.FileExtension,
-                                                                    m_InputFileListInfo.PaddingDigits);
-
-    if(fileList.empty())
-    {
-      QString ss = QObject::tr("No files have been selected for import. Have you set the input directory?");
-      setErrorCondition(-11);
-      notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
-    }
-    else
-    {
-      setFileName(fileList[0]);
-      QFileInfo fi(fileList[0]);
-      DataArrayPath dap(getDataContainerName(), getCellAttributeMatrixName(), fi.baseName());
-      readImage(dap, true); // will add an attribute array if successful
-	  if (getErrorCondition() == -5) // If there is an error related to ITK ImageIO factories, register them and try again
-	  {
-		  setErrorCondition(0); // Reset error condition
-		  registerImageIOFactories();
-		  readImage(dap, true);
-	  }
-      if(getErrorCondition() >= 0)
-      {
-        // Remove the attribute array that we don't need at this point
-        AttributeMatrix::Pointer am = m->getAttributeMatrix(getCellAttributeMatrixName());
-        am->removeAttributeArray(fi.baseName());
-      }
-
-      AttributeMatrix::Pointer mdAttrMat = getDataContainerArray()->getDataContainer(getDataContainerName())->getAttributeMatrix(getMetaDataAttributeMatrixName());
-      size_t availableFileCount = 0;
-      for(QVector<QString>::iterator filepath = fileList.begin(); filepath != fileList.end(); ++filepath)
-      {
-        QString imageFName = *filepath;
-        QFileInfo fi(imageFName);
-        if(fi.exists())
-        {
-          availableFileCount++;
-        }
-      }
-      mdAttrMat->setTupleDimensions(QVector<size_t>(1, availableFileCount));
-
-      QVector<size_t> cDims(1, 1);
-
-      for(QVector<QString>::iterator filepath = fileList.begin(); filepath != fileList.end(); ++filepath)
-      {
-        QString imageFName = *filepath;
-        QFileInfo fi(imageFName);
-        if(!fi.exists())
-        {
-          continue;
-        }
-        QStringList splitFilePaths = imageFName.split('/');
-        QString fileName = splitFilePaths[splitFilePaths.size() - 1];
-        splitFilePaths = fileName.split('.');
-        DataArrayPath path(getDataContainerName(), getCellAttributeMatrixName(), splitFilePaths[0]);
-        getDataContainerArray()->createNonPrereqArrayFromPath<UInt8ArrayType, ITKMontageFromFilesystem, uint8_t>(this, path, 0, cDims);
-        if(getErrorCondition() < 0)
-        {
-          return;
-        }
-      }
-    }
+    ss = QObject::tr("The input tile configuration file does not exist");
+    setErrorCondition(-23);
+    notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
+    return;
   }
+
+  //QVector<size_t> tDims(1, m_InputTileConfiguration.EndIndex - m_InputTileConfiguration.StartIndex + 1);
+  //QVector<size_t> cDims(1, 1);
+  //getDataContainerArray()->getDataContainer(getDataContainerName())->createNonPrereqAttributeMatrix(this, getMetaDataAttributeMatrixName(), tDims, AttributeMatrix::Type::MetaData);
+  //if(getErrorCondition() < 0)
+  //{
+  //  return;
+  //}
 }
 
 // -----------------------------------------------------------------------------
@@ -237,8 +166,8 @@ void ITKMontageFromFilesystem::preflight()
 // -----------------------------------------------------------------------------
 void ITKMontageFromFilesystem::setCancel(bool value)
 {
-  itk::ProcessObject* filter = m_CurrentFilter; //make a local copy before comparison in case of data multi-threaded data race
-  if(value && filter) // request cancellation of the operation
+  itk::ProcessObject* filter = m_CurrentFilter; // make a local copy before comparison in case of data multi-threaded data race
+  if(value && filter)                           // request cancellation of the operation
   {
     filter->SetAbortGenerateData(true);
   }
@@ -263,87 +192,22 @@ void ITKMontageFromFilesystem::execute()
   PositionTableType posTable;
   FilenameTableType filesTable;
 
-  QFileInfo tileConfiguration(QDir(m_InputFileListInfo.InputPath), "TileConfiguration.txt");
+  QFileInfo tileConfiguration(QDir(m_InputTileConfiguration.InputPath), "TileConfiguration.txt");
   if(tileConfiguration.exists())
   {
     QString tileConfigPath = tileConfiguration.absoluteFilePath();
     QString ss = QObject::tr("Found %1 file. Using it and ignoring InputFileList").arg(tileConfigPath);
     notifyStatusMessage(getMessagePrefix(), getHumanLabel(), ss);
-    loadTileConfiguration(m_InputFileListInfo.InputPath.toStdString(), m_MontageSize.x, m_MontageSize.y, posTable, filesTable);
+    loadTileConfiguration(m_InputTileConfiguration.InputPath.toStdString(), m_MontageSize.x, m_MontageSize.y, posTable, filesTable);
+    //auto tiles = itk::ParseTileConfiguration2D(m_InputTileConfiguration);
   }
   else
   {
-    bool hasMissingFiles = false;
-    bool orderAscending = false;
-
-    if(m_InputFileListInfo.Ordering == 0)
-    {
-      orderAscending = true;
-    }
-    else if(m_InputFileListInfo.Ordering == 1)
-    {
-      orderAscending = false;
-    }
-
-    // Now generate all the file names the user is asking for and populate the table
-    QVector<QString> fileList = FilePathGenerator::GenerateFileList(m_InputFileListInfo.StartIndex, m_InputFileListInfo.EndIndex, m_InputFileListInfo.IncrementIndex, hasMissingFiles, orderAscending,
-                                                                    m_InputFileListInfo.InputPath, m_InputFileListInfo.FilePrefix, m_InputFileListInfo.FileSuffix, m_InputFileListInfo.FileExtension,
-                                                                    m_InputFileListInfo.PaddingDigits);
-
-    if(fileList.empty())
-    {
-      QString ss = QObject::tr("No files have been selected for import. Have you set the input directory?");
-      setErrorCondition(-11);
-      notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
-      return;
-    }
-    if(hasMissingFiles)
-    {
-      QString ss = QObject::tr("Some files from the list are missing.");
-      setErrorCondition(-12);
-      notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
-      return;
-    }
-    if(fileList.size() != m_MontageSize.x * m_MontageSize.y)
-    {
-      QString ss = QObject::tr("Montage size is %1x%2=%3, but InputFileList has %4 entries.")
-          .arg(m_MontageSize.x, m_MontageSize.y, m_MontageSize.x * m_MontageSize.y).arg(fileList.size());
-      setErrorCondition(-19);
-      notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
-      return;
-    }
-
-    QVector<QString>::iterator filepath = fileList.begin();
-    filesTable.resize(m_MontageSize.y);
-    posTable.resize(m_MontageSize.y);
-    for(int y = 0; y < m_MontageSize.y; y++)
-    {
-      filesTable[y].resize(m_MontageSize.x);
-      posTable[y].resize(m_MontageSize.x);
-      for(int x = 0; x < m_MontageSize.x; x++)
-      {
-        assert(filepath != fileList.end());
-        QString imageFName = *filepath;
-        QFileInfo fi(imageFName);
-        if(!fi.exists())
-        {
-          QString ss = QObject::tr("%1 does not exist").arg(imageFName);
-          setErrorCondition(-11);
-          notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
-          return;
-        }
-
-        filesTable[y][x] = imageFName.toStdString();
-
-        PointType p;
-        p.Fill(0.0);
-        posTable[y][x] = p;
-
-        ++filepath; //get next filename from the list
-      }
-    }
+    QString ss = QObject::tr("The input tile configuration file does not exist");
+    setErrorCondition(-23);
+    notifyErrorMessage(getHumanLabel(), ss, getErrorCondition());
+    return;
   }
-  //either way, posTable and filesTable are now filled
 
   if(getCancel())
   {
@@ -426,7 +290,7 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
   using PCMType = itk::PhaseCorrelationImageRegistrationMethod<ScalarImageType, ScalarImageType>;
   typename ScalarImageType::SpacingType sp;
   sp.Fill(1.0); // assume unit spacing
-  //itk::ObjectFactoryBase::RegisterFactory(itk::TxtTransformIOFactory::New());
+  // itk::ObjectFactoryBase::RegisterFactory(itk::TxtTransformIOFactory::New());
 
   using PeakInterpolationType = typename itk::MaxPhaseCorrelationOptimizer<PCMType>::PeakInterpolationMethod;
   using PeakFinderUnderlying = typename std::underlying_type<PeakInterpolationType>::type;
@@ -436,7 +300,7 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
   unsigned ySize = filenames.size();
   unsigned x1 = 1;
   unsigned y1 = 1;
-  if (xSize < 2)
+  if(xSize < 2)
   {
     x1 = 0;
   }
@@ -466,7 +330,7 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
   }
 
   notifyStatusMessage(getHumanLabel(), "Doing the tile registrations");
-  //itk::SimpleFilterWatcher fw(montage, "montage");
+  // itk::SimpleFilterWatcher fw(montage, "montage");
   montage->Update();
   notifyStatusMessage(getHumanLabel(), "Finished the tile registrations");
 
@@ -484,7 +348,7 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
   // write generated mosaic
   using Resampler = itk::TileMergeImageFilter<OriginalImageType, AccumulatePixelType>;
   typename Resampler::Pointer resampleF = Resampler::New();
-  //itk::SimpleFilterWatcher fw2(resampleF, "resampler");
+  // itk::SimpleFilterWatcher fw2(resampleF, "resampler");
   if(true)
   {
     resampleF->SetMontage(montage);
@@ -514,15 +378,15 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
 
   notifyStatusMessage(getHumanLabel(), "Resampling tiles into the stitched image");
   //// resampleF->Update();
-  //using WriterType = itk::ImageFileWriter<OriginalImageType>;
-  //typename WriterType::Pointer w = WriterType::New();
-  //w->SetInput(resampleF->GetOutput());
+  // using WriterType = itk::ImageFileWriter<OriginalImageType>;
+  // typename WriterType::Pointer w = WriterType::New();
+  // w->SetInput(resampleF->GetOutput());
   //// resampleF->DebugOn(); //generate an image of contributing regions
   //// MetaImage format supports streaming
-  //w->SetFileName("C:/a/Dream3D.mha");
-  //w->UseCompressionOn();
-  //w->SetNumberOfStreamDivisions(streamSubdivisions);
-  //w->Update();
+  // w->SetFileName("C:/a/Dream3D.mha");
+  // w->UseCompressionOn();
+  // w->SetNumberOfStreamDivisions(streamSubdivisions);
+  // w->Update();
 
   streamingFilter->Update();
   notifyStatusMessage(getHumanLabel(), "Finished resampling tiles");
@@ -551,7 +415,6 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
   toDream3DFilter->SetDataArrayName(dataArrayPath.getDataArrayName().toStdString());
   toDream3DFilter->SetDataContainer(container);
   toDream3DFilter->Update();
-
 }
 
 void ITKMontageFromFilesystem::registerImageIOFactories()

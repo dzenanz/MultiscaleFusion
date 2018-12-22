@@ -5,7 +5,7 @@
 #pragma once
 
 #include "SIMPLib/Common/SIMPLibSetGetMacros.h"
-#include "SIMPLib/FilterParameters/FileListInfoFilterParameter.h"
+#include "SIMPLib/FilterParameters/InputFileFilterParameter.h"
 #include "SIMPLib/FilterParameters/IntVec3FilterParameter.h"
 #include "SIMPLib/FilterParameters/StringFilterParameter.h"
 #include "SIMPLib/Filtering/AbstractFilter.h"
@@ -28,7 +28,7 @@ class MultiscaleFusion_EXPORT ITKMontageFromFilesystem : public AbstractFilter
   PYB11_PROPERTY(IntVec3_t MontageSize READ getMontageSize WRITE setMontageSize)
   // PYB11_PROPERTY(FloatVec3_t Origin READ getOrigin WRITE setOrigin)
   // PYB11_PROPERTY(FloatVec3_t Resolution READ getResolution WRITE setResolution)
-  PYB11_PROPERTY(FileListInfo_t InputFileListInfo READ getInputFileListInfo WRITE setInputFileListInfo)
+  PYB11_PROPERTY(InputFileFilterParameter InputTileConfiguration READ getInputTileConfiguration WRITE setInputTileConfiguration)
   PYB11_PROPERTY(QString DataContainerName READ getDataContainerName WRITE setDataContainerName)
   PYB11_PROPERTY(QString CellAttributeMatrixName READ getCellAttributeMatrixName WRITE setCellAttributeMatrixName)
   PYB11_PROPERTY(QString MetaDataAttributeMatrixName READ getMetaDataAttributeMatrixName WRITE setMetaDataAttributeMatrixName)
@@ -44,8 +44,8 @@ public:
   SIMPL_FILTER_PARAMETER(IntVec3_t, MontageSize)
   Q_PROPERTY(IntVec3_t MontageSize READ getMontageSize WRITE setMontageSize)
 
-  SIMPL_FILTER_PARAMETER(FileListInfo_t, InputFileListInfo)
-  Q_PROPERTY(FileListInfo_t InputFileListInfo READ getInputFileListInfo WRITE setInputFileListInfo)
+  SIMPL_FILTER_PARAMETER(InputFileFilterParameter, InputTileConfiguration)
+  Q_PROPERTY(InputFileFilterParameter InputTileConfiguration READ getInputTileConfiguration WRITE setInputTileConfiguration)
 
   SIMPL_FILTER_PARAMETER(QString, DataContainerName)
   Q_PROPERTY(QString DataContainerName READ getDataContainerName WRITE setDataContainerName)

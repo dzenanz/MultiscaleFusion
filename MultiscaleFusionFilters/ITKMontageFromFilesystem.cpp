@@ -22,6 +22,38 @@
 #include "MultiscaleFusion/MultiscaleFusionConstants.h"
 #include "MultiscaleFusion/MultiscaleFusionVersion.h"
 
+#include "itkCommand.h"
+
+ITKMontageFromFilesystem* progressFilter = nullptr;
+
+class MyCommand : public itk::Command
+{
+public:
+  itkNewMacro(MyCommand);
+
+  void Execute(itk::Object* caller, const itk::EventObject& event) override
+  {
+    Execute((const itk::Object*)caller, event);
+  }
+
+  void Execute(const itk::Object* caller, const itk::EventObject& event) override
+  {
+    if(!itk::ProgressEvent().CheckEvent(&event))
+    {
+      return;
+    }
+    const auto* processObject = dynamic_cast<const itk::ProcessObject*>(caller);
+    if(!processObject)
+    {
+      return;
+    }
+    std::cout << "Progress: " << processObject->GetProgress() << std::endl;
+
+    progressFilter->notifyProgressMessage("prefix", "humanLab", "str.", processObject->GetProgress() * 100);
+    progressFilter->notifyStatusMessage("humanLab", QString::number(processObject->GetProgress() * 100));
+  }
+};
+
 // -----------------------------------------------------------------------------
 //
 // -----------------------------------------------------------------------------
@@ -437,7 +469,9 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
   }
 
   notifyStatusMessage(getHumanLabel(), "Doing the tile registrations");
-  //itk::SimpleFilterWatcher fw(montage, "montage");
+  MyCommand::Pointer myCommand = MyCommand::New();
+  progressFilter = this;
+  montage->AddObserver(itk::ProgressEvent(), myCommand);
   montage->Update();
   notifyStatusMessage(getHumanLabel(), "Finished the tile registrations");
 
@@ -455,7 +489,7 @@ void ITKMontageFromFilesystem::doMontage(const PositionTableType& tilePositions,
   // write generated mosaic
   using Resampler = itk::TileMergeImageFilter<OriginalImageType, AccumulatePixelType>;
   typename Resampler::Pointer resampleF = Resampler::New();
-  //itk::SimpleFilterWatcher fw2(resampleF, "resampler");
+  resampleF->AddObserver(itk::ProgressEvent(), myCommand);
   if(true)
   {
     resampleF->SetMontage(montage);

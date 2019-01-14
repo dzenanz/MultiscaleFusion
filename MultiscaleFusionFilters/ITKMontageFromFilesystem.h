@@ -44,8 +44,11 @@ public:
   SIMPL_FILTER_PARAMETER(IntVec3_t, MontageSize)
   Q_PROPERTY(IntVec3_t MontageSize READ getMontageSize WRITE setMontageSize)
 
-  SIMPL_FILTER_PARAMETER(InputFileFilterParameter, InputTileConfiguration)
-  Q_PROPERTY(InputFileFilterParameter InputTileConfiguration READ getInputTileConfiguration WRITE setInputTileConfiguration)
+  //SIMPL_FILTER_PARAMETER(InputFileFilterParameter, InputTileConfiguration)
+  //Q_PROPERTY(InputFileFilterParameter InputTileConfiguration READ getInputTileConfiguration WRITE setInputTileConfiguration)
+  //above does not compile, so use QString
+  SIMPL_FILTER_PARAMETER(QString, InputTileConfiguration)
+  Q_PROPERTY(QString InputTileConfiguration READ getInputTileConfiguration WRITE setInputTileConfiguration)
 
   SIMPL_FILTER_PARAMETER(QString, DataContainerName)
   Q_PROPERTY(QString DataContainerName READ getDataContainerName WRITE setDataContainerName)

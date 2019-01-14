@@ -7,7 +7,7 @@
 #include <fstream>
 
 //#include "itkImageFileWriter.h" //for debugging
-//#include "itkParseTileConfiguration.h"
+#include "itkParseTileConfiguration.h"
 #include "itkStreamingImageFilter.h"
 #include "itkTileMergeImageFilter.h"
 #include "itkTileMontage.h"
@@ -18,7 +18,7 @@
 #include "SIMPLib/Common/Constants.h"
 #include "SIMPLib/Geometry/ImageGeom.h"
 //#include "SIMPLib/ITK/itkBridge.h"
-#include "SIMPLib/Utilities/FilePathGenerator.h"
+//#include "SIMPLib/Utilities/FilePathGenerator.h"
 
 #include "MultiscaleFusion/MultiscaleFusionConstants.h"
 #include "MultiscaleFusion/MultiscaleFusionVersion.h"
@@ -53,7 +53,7 @@ ITKMontageFromFilesystem::ITKMontageFromFilesystem()
 {
   m_MontageSize = {3, 3, 1};
 
-  m_InputTileConfiguration.setFileExtension("txt");
+  m_InputTileConfiguration = "txt";
 
   initialize();
 }
@@ -128,7 +128,7 @@ void ITKMontageFromFilesystem::dataCheck() // plagiarized from DREAM3D_Plugins/I
     notifyStatusMessage(getMessagePrefix(), getHumanLabel(), ss);
     PositionTableType pt;
     FilenameTableType ft;
-    loadTileConfiguration(m_InputTileConfiguration.InputPath.toStdString(), m_MontageSize.x, m_MontageSize.y, pt, ft);
+    loadTileConfiguration(m_InputTileConfiguration.toStdString(), m_MontageSize.x, m_MontageSize.y, pt, ft);
   }
   else
   {
@@ -192,14 +192,14 @@ void ITKMontageFromFilesystem::execute()
   PositionTableType posTable;
   FilenameTableType filesTable;
 
-  QFileInfo tileConfiguration(QDir(m_InputTileConfiguration.InputPath), "TileConfiguration.txt");
+  QFileInfo tileConfiguration(QDir(m_InputTileConfiguration), "TileConfiguration.txt");
   if(tileConfiguration.exists())
   {
     QString tileConfigPath = tileConfiguration.absoluteFilePath();
     QString ss = QObject::tr("Found %1 file. Using it and ignoring InputFileList").arg(tileConfigPath);
     notifyStatusMessage(getMessagePrefix(), getHumanLabel(), ss);
-    loadTileConfiguration(m_InputTileConfiguration.InputPath.toStdString(), m_MontageSize.x, m_MontageSize.y, posTable, filesTable);
-    //auto tiles = itk::ParseTileConfiguration2D(m_InputTileConfiguration);
+    loadTileConfiguration(m_InputTileConfiguration.toStdString(), m_MontageSize.x, m_MontageSize.y, posTable, filesTable);
+    //auto tiles = itk::ParseTileConfiguration2D(m_InputTileConfiguration.toStdString()); // TODO: refactor
   }
   else
   {
